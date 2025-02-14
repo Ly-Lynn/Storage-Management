@@ -17,9 +17,11 @@ from .tasks import (update_stock,
                     soft_delete_product)
 
 # Create your views here.
-class ProductViewSet(generics.ListCreateAPIView, generics.RetrieveAPIView):
+class ProductViewSet(generics.ListCreateAPIView, generics.RetrieveUpdateAPIView):
     queryset = Product.objects.filter(is_deleted=False)
     serializer_class = ProductSerializer
+    ordering_fields = ['price', 'quantity']
+    search_fields = ['name', 'category__name', 'brand__name']
 
     def get_serializer_context(self):
         context = super().get_serializer_context()
@@ -39,9 +41,9 @@ class ProductViewSet(generics.ListCreateAPIView, generics.RetrieveAPIView):
             history_obj = {
                 "action": "CREATE",
                 "value_before": None,
-                "value_after": serializer.data,
+                "value_after": serializer.data.get("value"),
                 "created_at": datetime.now(),
-                "name_field_updated": "product",
+                "name_field_updated": serializer.data.get('name_field'),
                 # "user": request.user,
                 "service_updated": "ProductService",
                 "object_id": serializer.data.get('id'),
@@ -54,6 +56,22 @@ class ProductViewSet(generics.ListCreateAPIView, generics.RetrieveAPIView):
             if response.status_code != 201: 
                 return Response({'error': 'Inventory creation failed'}, status=status.HTTP_400_BAD_REQUEST)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
+    def patch(self, request, *args, **kwargs):
+        serializer = self.serializer_class(data=request.data)
+        value_before = Product.objects.get(id=serializer.data.get('id')).value
+        if serializer.is_valid():
+            serializer.save()
+            history_obj = {
+                "action": "UPDATE",
+                "value_before": value_before,
+                "value_after": serializer.data.get("value"),
+                "created_at": datetime.now(),
+                "name_field_updated": serializer.data.get('name_field'),
+                # "user": request.user,
+                "service_updated": "ProductService",
+                "object_id": serializer.data.get('id'),
+                "endpoint": "products"
+            }
 
 class ProductSoftDelete(generics.DestroyAPIView):
     queryset = Product.objects.all()

@@ -4,6 +4,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
+from bson import ObjectId
 
 from .serializers import HistorySerializer
 from .models import History
@@ -22,11 +23,21 @@ class HistoryViewSet(generics.ListCreateAPIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class HistoryRollback(generics.CreateAPIView):
-    queryset = History.objects.all()
     serializer_class = HistorySerializer
 
     def create(self, request, *args, **kwargs):
-        instance = get_object_or_404(History, pk=self.kwargs.get("pk"))
+        history_id = self.kwargs.get("pk")
+
+        try:
+            if not ObjectId.is_valid(history_id):
+                return Response({"error": "Invalid ObjectId"}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception:
+            return Response({"error": "ObjectId error"}, status=status.HTTP_400_BAD_REQUEST)
+
+        instance = History.objects.filter(id=history_id).first()
+        if not instance:
+            return Response({"error": "History not found"}, status=status.HTTP_404_NOT_FOUND)
+
         data = {
             "action": "ROLLBACK",
             "value_before": instance.value_after,

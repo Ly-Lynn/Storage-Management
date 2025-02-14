@@ -1,3 +1,5 @@
+version: "3.8"
+
 services:
   # RabbitMQ - Message Broker cho Celery
   rabbitmq:
@@ -16,8 +18,10 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-    
+    networks:
+      - app_network
 
+  # Redis - dùng chung cho tất cả các service
   redis:
     image: "redis:latest"
     container_name: redis
@@ -29,6 +33,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - app_network
 
   # PostgreSQL - Database của UserService
   user-db:
@@ -44,11 +50,14 @@ services:
     volumes:
       - postgres_user_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-user_postgres} -d ${POSTGRES_DB:-postgres}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - app_network
 
+  # User Service
   user-service:
     build: ./backend/UserService
     container_name: user-service
@@ -66,42 +75,27 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    networks:
+      - app_network
 
-  user-celery-worker:
-    build: ./backend/UserService
-    container_name: celery-worker
+  # MongoDB - Database của ProductService
+  product-mongodb:
+    image: mongo:latest
+    container_name: product-mongodb
     restart: always
+    ports:
+      - "27017:27017"
     volumes:
-      - ./backend/UserService:/UserService
-    env_file:
-      - .env
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-      user-db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    command: celery -A UserService worker --loglevel=info
+      - mongodb_product_data:/data/db
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - app_network
 
-  # Celery Beat
-  user-celery-beat:
-    build: ./backend/UserService
-    container_name: user-celery-beat
-    restart: always
-    volumes:
-      - ./backend/UserService:/UserService
-    env_file:
-      - .env
-    depends_on:
-      user-service:
-        condition: service_started
-      rabbitmq:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    command: celery -A UserService beat --loglevel=info
-
+  # Product Service
   product-service:
     build: ./backend/ProductService
     container_name: product-service
@@ -115,89 +109,14 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
-      user-db:
+      product-mongodb:
         condition: service_healthy
       redis:
         condition: service_healthy
-  product-db:
-    image: postgres:latest
-    container_name: product-db
-    restart: always
-    environment:
-      POSTGRES_DB: ${POSTGRES_PRODUCT_DB}
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-    ports:
-      - "5433:5432"
-    volumes:
-      - postgres_product_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-user_postgres} -d ${POSTGRES_DB:-postgres}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-  product-mongodb:
-    image: mongo:latest
-    container_name: product-mongodb
-    restart: always
-    ports:
-      - "27017:27017"
-    volumes:
-      - mongodb_data:/data/db
-    healthcheck:
-      test: ["CMD", "mongo", "--eval", "db.adminCommand('ping')"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-  product-celery-worker:
-    build: ./backend/ProductService
-    container_name: product-celery-worker
-    restart: always
-    volumes:
-      - ./backend/ProductService:/ProductService
-    env_file:
-      - .env
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-      product-db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    command: celery -A ProductService worker --loglevel=info
-  product-celery-beat:
-    build: ./backend/ProductService
-    container_name: product-celery-beat
-    restart: always
-    volumes:
-      - ./backend/ProductService:/ProductService
-    env_file:
-      - .env
-    depends_on:
-      product-service:
-        condition: service_started
-      rabbitmq:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    command: celery -A ProductService beat --loglevel=info
-  inventory-service:
-    build: ./backend/InventoryService
-    container_name: inventory-service
-    restart: always
-    volumes:
-      - ./backend/InventoryService:/InventoryService
-    env_file:
-      - .env
-    ports:
-      - "8003:8000"
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-      product-db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+    networks:
+      - app_network
+
+  # PostgreSQL - Database của InventoryService
   inventory-db:
     image: postgres:latest
     container_name: inventory-db
@@ -211,18 +130,24 @@ services:
     volumes:
       - postgres_inventory_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-user_postgres} -d ${POSTGRES_DB:-postgres}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 10s
       timeout: 5s
       retries: 5
-  inventory-celery-worker:
+    networks:
+      - app_network
+
+  # Inventory Service
+  inventory-service:
     build: ./backend/InventoryService
-    container_name: inventory-celery-worker
+    container_name: inventory-service
     restart: always
     volumes:
       - ./backend/InventoryService:/InventoryService
     env_file:
       - .env
+    ports:
+      - "8003:8000"
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -230,22 +155,58 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    command: celery -A InventoryService worker --loglevel=info
-  inventory-celery-beat:
-    build: ./backend/InventoryService
-    container_name: inventory-celery-beat
+    networks:
+      - app_network
+
+  # MongoDB - Database của HistoryService
+  history-mongo-db:
+    image: mongo:latest
+    container_name: history-mongo-db
+    restart: always
+    ports:
+      - "27018:27017"
+    volumes:
+      - mongodb_history_data:/data/db
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD}
+      MONGO_INITDB_DATABASE: history_logs_db
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - app_network
+
+
+  # History Service
+  history-service:
+    build: ./backend/HistoryService
+    container_name: history-service
     restart: always
     volumes:
-      - ./backend/InventoryService:/InventoryService
+      - ./backend/HistoryService:/HistoryService
     env_file:
       - .env
+    ports:
+      - "8100:8000"
     depends_on:
-      inventory-service:
-        condition: service_started
+      history-mongo-db:
+        condition: service_healthy
       rabbitmq:
         condition: service_healthy
       redis:
         condition: service_healthy
-    command: celery -A InventoryService beat --loglevel=info
+    networks:
+      - app_network
+
+networks:
+  app_network:
+    driver: bridge
+
 volumes:
   postgres_user_data:
+  postgres_inventory_data:
+  mongodb_product_data:
+  mongodb_history_data:

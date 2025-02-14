@@ -89,23 +89,19 @@ import os
 
 DATABASES = {
     "default": {
-        "ENGINE": "django.db.backends.postgresql",
-        "NAME": os.getenv("POSTGRES_DB", "product_db"),
-        "USER": os.getenv("POSTGRES_USER", "postgres"),
-        "PASSWORD": os.getenv("POSTGRES_PASSWORD", "password"),
-        "HOST": os.getenv("POSTGRES_PRODUCT_HOST", "host"),
-        "PORT": "5432",
-    },
-    
-    "mongodb": {
         "ENGINE": "djongo",
-        "NAME": "product_logs_db",
+        "NAME": "history_logs_db",  # Database đã được tạo sẵn
+        "ENFORCE_SCHEMA": False,
         "CLIENT": {
-            "host": "mongodb://mongodb:27017",
+            "host": "mongodb://history-mongo-db:27017/",
+            "username": os.getenv("MONGO_INITDB_ROOT_USERNAME", "root"),
+            "password": os.getenv("MONGO_INITDB_ROOT_PASSWORD", "1234"),
+            "authSource": "admin",  
+            "authMechanism": "SCRAM-SHA-256",  
         }
     }
 }
-DATABASE_ROUTERS = ["ProductService.database_router.ProductDatabaseRouter"]
+
 
 
 # Password validation
@@ -199,6 +195,7 @@ CELERY_RESULT_SERIALIZER = "json"
 # Service conversation
 INVENTORY_SERVICE_URL = "http://localhost:8003/api/inventory/"
 USER_SERVICE_URL = "http://localhost:8001/api/user/"
+PRODUCT_SERVICE_URL = "http://localhost:8002/api/product/"
 
 # REDIS
 REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
