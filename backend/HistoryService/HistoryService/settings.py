@@ -43,8 +43,6 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "rest_framework",
-    "product",
-    "category",
     "django_filters",
     "rest_framework_simplejwt",
     "django_redis",

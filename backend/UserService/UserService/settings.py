@@ -195,7 +195,6 @@ CACHES = {
 
 # RabbitMQ cho Celery
 CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", "amqp://guest:guest@rabbitmq:5672/")
-# Redis làm Backend cho Celery
 CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", "redis://redis:6379/0")
 
 CELERY_ACCEPT_CONTENT = ["json"]

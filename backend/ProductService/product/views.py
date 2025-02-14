@@ -2,6 +2,8 @@ from django.shortcuts import render
 from datetime import datetime
 from rest_framework import generics, viewsets, status
 from rest_framework.response import Response
+import requests
+from django.conf import settings
 
 from .serializers import (
     ProductSerializer
@@ -9,26 +11,71 @@ from .serializers import (
 from .models import (
     Product
 )
-from .tasks import create_product_inventory
+from .tasks import (update_stock, 
+                    create_inventory, 
+                    create_history, 
+                    soft_delete_product)
 
 # Create your views here.
-class ProductViewSet(viewsets.ModelViewSet):
-    queryset = Product.objects.all()
+class ProductViewSet(generics.ListCreateAPIView, generics.RetrieveAPIView):
+    queryset = Product.objects.filter(is_deleted=False)
     serializer_class = ProductSerializer
-    
+
     def get_serializer_context(self):
         context = super().get_serializer_context()
         context['request'] = self.request
         return context
-    def create(self, request, *args, **kwargs):
+    
+    def post(self, request, *args, **kwargs):
         serializer = self.serializer_class(data=request.data)
         if serializer.is_valid(raise_exception=True):
             serializer.save()
             inventory_obj = {
                 'product_id': serializer.data.get('id'),
-                'quantity': serializer.data.get('inventory').get('stock'),
+                'quantity': serializer.data.get('quantity'),
                 'supplier': serializer.data.get('supplier'),
-                'last_updated': datetime.now()
+                'last_updated': serializer.data.get('updated_at')
             }
-            create_product_inventory.delay(inventory_obj)
+            history_obj = {
+                "action": "CREATE",
+                "value_before": None,
+                "value_after": serializer.data,
+                "created_at": datetime.now(),
+                "name_field_updated": "product",
+                # "user": request.user,
+                "service_updated": "ProductService",
+                "object_id": serializer.data.get('id'),
+                "endpoint": "products"
+            }
+            create_history.delay(history_obj)
+            response = requests.post(settings.INVENTORY_SERVICE_URL , json=inventory_obj)
+            
+            # need response immediately to return notification to user  
+            if response.status_code != 201: 
+                return Response({'error': 'Inventory creation failed'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+class ProductSoftDelete(generics.DestroyAPIView):
+    queryset = Product.objects.all()
+    serializer_class = ProductSerializer
+
+    def delete(self, request, *args, **kwargs):
+        instance = self.get_object()
+        instance.is_deleted = True
+        instance.save()
+        data = {
+            "action": "DELETE",
+            "value_before": False,
+            "value_after": True,
+            "created_at": datetime.now(),
+            "name_field_updated": "is_deleted",
+            # "user": request.user,
+            "service_updated": "ProductService",
+            "object_id": instance.id,
+            "endpoint": "products"
+        }
+        create_history.delay(data)
+        return Response({
+            "message": "Product deleted successfully",
+        }, status=status.HTTP_200_OK)
     

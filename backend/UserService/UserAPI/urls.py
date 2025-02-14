@@ -17,5 +17,5 @@ urlpatterns = [
 
     path("user/verify/", VerifyEmail.as_view()),
     path("user/login/", LoginView.as_view({"post": "create"})),
-    path("auth/", include("djoser.urls")),    
+    # path("auth/", include("djoser.urls")),    
 ]
