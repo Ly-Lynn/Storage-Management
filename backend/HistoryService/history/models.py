@@ -5,11 +5,11 @@ from djongo import models
 class History(models.Model):
     object_id = models.CharField(max_length=255)  
     service_updated = models.CharField(max_length=255)
-    name_field_updated = models.CharField(max_length=255)
+    name_fields_updated = models.JSONField()
     value_before = models.JSONField()  
     value_after = models.JSONField()
     action = models.CharField(max_length=50, default="UPDATE")
-    endpoint = models.URLField()
+    # endpoint = models.URLField()
     created_at = models.DateTimeField(auto_now_add=True)  
 
     def __str__(self):

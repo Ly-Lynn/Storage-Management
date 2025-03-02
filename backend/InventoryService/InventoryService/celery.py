@@ -9,13 +9,17 @@ app.autodiscover_tasks()
 
 from celery.schedules import crontab
 
-# app.conf.beat_schedule = {
-#     "check-otp-expiry-every-10-minutes": {
-#         "task": "UserAPI.tasks.check_otp_expiry",
-#         "schedule": crontab(minute="*/10"),  # Chạy mỗi 10 phút
-#     },
-#     "check-temp-user-every-5-minutes": {
-#         "task": "UserAPI.tasks.delete_expired_temp_users",
-#         "schedule": crontab(minute="*/10"),  # Chạy mỗi 10 phút
-#     },
-# }
+app.conf.beat_schedule = {
+    "delete-expired-inventories-every-24-hours": {
+        "task": "inventory.delete_expired",
+        "schedule": crontab(hour="*/24"), 
+    },
+    "delete-expired-suppliers-every-24-hours": {
+        "task": "supplier.delete_expired",
+        "schedule": crontab(hour="*/24"), 
+    },
+    "delete-expired-stock-every-24-hours": {
+        "task": "stock_movement.delete_expired",
+        "schedule": crontab(0, 0, day_of_month='1'), 
+    },
+}

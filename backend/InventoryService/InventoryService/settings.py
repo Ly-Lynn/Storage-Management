@@ -203,6 +203,7 @@ CELERY_RESULT_SERIALIZER = "json"
 # Service conversation
 INVENTORY_SERVICE_URL = "http://localhost:8003/api/inventory/"
 USER_SERVICE_URL = "http://localhost:8001/api/user/"
+HISTORY_SERVICE_URL = "http://localhost:8100/api/history/"
 
 # REDIS
 REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
